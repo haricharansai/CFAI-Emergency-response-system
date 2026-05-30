@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emergency Response Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header class="page-header">
+    <div class="brand-mark">ER</div>
+    <div class="brand-copy">
+      <div class="hdr-title">Emergency Response Agent</div>
+      <div class="hdr-sub">Lightweight grid routing with selectable search algorithms</div>
+    </div>
+    <div class="status-pill amber" id="status-pill">Awaiting dispatch</div>
+  </header>
+
+  <main>
+    <section class="toolbar" aria-label="Controls">
+      <span class="t-label">Paint</span>
+      <div class="palette" id="palette">
+        <button class="terrain-btn active" data-t="wall" type="button">
+          <span class="dot dot-wall"></span>
+          <span>Wall</span>
+        </button>
+        <button class="terrain-btn" data-t="slow" type="button">
+          <span class="dot dot-slow"></span>
+          <span>Slow</span>
+        </button>
+        <button class="terrain-btn" data-t="traffic" type="button">
+          <span class="dot dot-traffic"></span>
+          <span>Traffic</span>
+        </button>
+        <button class="terrain-btn" data-t="oneway_e" type="button">
+          <span class="dot dot-oneway_e"></span>
+          <span>One-way -&gt;</span>
+        </button>
+        <button class="terrain-btn" data-t="oneway_s" type="button">
+          <span class="dot dot-oneway_s"></span>
+          <span>One-way v</span>
+        </button>
+      </div>
+
+      <div class="t-sep" aria-hidden="true"></div>
+
+      <label class="control-group" for="algorithm">
+        <span class="t-label">Algorithm</span>
+        <select class="select-input" id="algorithm">
+          <option value="bfs">BFS</option>
+          <option value="dfs">DFS</option>
+          <option value="astar" selected>A*</option>
+          <option value="ucs">UCS</option>
+        </select>
+      </label>
+
+      <div class="t-sep" aria-hidden="true"></div>
+
+      <button class="btn btn-dispatch" id="btn-dispatch" type="button">Dispatch</button>
+      <button class="btn" id="btn-new" type="button">New Map</button>
+      <button class="btn" id="btn-reset" type="button">Reset</button>
+
+      <span class="toolbar-note">Choose terrain, pick an algorithm, then dispatch.</span>
+    </section>
+
+    <section class="legend-bar" aria-label="Legend">
+      <div class="leg"><span class="dot dot-start"></span><span>Start A</span></div>
+      <div class="leg"><span class="dot dot-end"></span><span>Target B</span></div>
+      <div class="leg"><span class="dot dot-wall"></span><span>Wall</span></div>
+      <div class="leg"><span class="dot dot-slow"></span><span>Slow zone</span></div>
+      <div class="leg"><span class="dot dot-traffic"></span><span>Traffic</span></div>
+      <div class="leg"><span class="dot dot-oneway_e"></span><span>One-way -&gt;</span></div>
+      <div class="leg"><span class="dot dot-oneway_s"></span><span>One-way v</span></div>
+      <div class="leg"><span class="dot dot-path"></span><span>Path</span></div>
+      <div class="leg"><span class="dot dot-agent"></span><span>Responder</span></div>
+    </section>
+
+    <section class="grid-area">
+      <div class="grid-frame">
+        <div id="grid"></div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-val" id="s-steps">-</div>
+          <div class="stat-lbl">Steps</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="s-dist">-</div>
+          <div class="stat-lbl">Path</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="s-time">-</div>
+          <div class="stat-lbl">Time</div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="log-panel">
+      <div class="log-hdr">
+        <div class="log-dot" id="log-dot"></div>
+        <span>Agent Reasoning Log</span>
+      </div>
+      <div id="log"></div>
+    </aside>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
