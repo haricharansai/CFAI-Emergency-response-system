@@ -303,7 +303,11 @@ main {
 
 .grid-frame {
   overflow: auto;
-  padding-bottom: 4px;
+  padding: 16px;
+  min-height: 220px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f2f7fb 100%);
 }
 
 #grid {
@@ -311,6 +315,18 @@ main {
   gap: var(--gap);
   width: max-content;
   margin: 0 auto;
+}
+
+#grid:empty {
+  min-width: 100%;
+  min-height: 188px;
+  place-content: center;
+}
+
+#grid:empty::before {
+  content: "Preparing map...";
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .cell {

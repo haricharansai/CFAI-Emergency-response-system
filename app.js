@@ -5,6 +5,7 @@ const DEFAULT_GRID = {
   end: [4, 9],
   density: 0.2
 };
+const API_REQUEST_TIMEOUT_MS = 3500;
 const FALLBACK_API_ORIGINS = [
   "http://127.0.0.1:8000",
   "http://localhost:8000",
@@ -45,7 +46,11 @@ if (paletteEl) {
 }
 
 function getErrorMessage(error, fallbackMessage) {
-  if (error instanceof TypeError) {
+  if (isConnectivityError(error) && error?.name === "AbortError") {
+    return "The API took too long to respond. Start the backend server and reload the page.";
+  }
+
+  if (isConnectivityError(error)) {
     return "Could not reach the API. Start the backend server and reload the page.";
   }
 
@@ -54,6 +59,10 @@ function getErrorMessage(error, fallbackMessage) {
   }
 
   return fallbackMessage;
+}
+
+function isConnectivityError(error) {
+  return error instanceof TypeError || error?.name === "AbortError";
 }
 
 function buildApiCandidates() {
@@ -84,6 +93,17 @@ function requestTargets(allowFallbackOrigins) {
   }
 
   return [...new Set(targets)];
+}
+
+async function fetchWithTimeout(url, options) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 function makeCell(row, col, state = "empty") {
@@ -131,6 +151,20 @@ function buildLocalGrid(config = DEFAULT_GRID) {
   return { rows, cols, start, end, cells };
 }
 
+function renderPreviewGrid() {
+  gridState = buildLocalGrid(DEFAULT_GRID);
+  renderGrid();
+  resetStats();
+  clearLog();
+  addLog(
+    "system",
+    "Preview loaded",
+    "Showing a local preview grid while the backend map initializes.",
+    ""
+  );
+  setStatus("Loading map", "blue");
+}
+
 function paintCellLocally(row, col) {
   if (!gridState) return;
 
@@ -155,7 +189,7 @@ async function postJson(path, payload, { allowFallbackOrigins = true } = {}) {
 
   for (const base of requestTargets(allowFallbackOrigins)) {
     try {
-      const response = await fetch(`${base}${path}`, {
+      const response = await fetchWithTimeout(`${base}${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -189,8 +223,9 @@ function selectedAlgorithmLabel() {
   }[selectedAlgorithm()] || "A*";
 }
 
-async function init() {
-  await fetchNewGrid();
+function init() {
+  renderPreviewGrid();
+  void fetchNewGrid();
 }
 
 async function fetchNewGrid() {
@@ -208,7 +243,10 @@ async function fetchNewGrid() {
     );
     setStatus("Awaiting dispatch", "amber");
   } catch (error) {
-    gridState = buildLocalGrid(DEFAULT_GRID);
+    if (!gridState) {
+      gridState = buildLocalGrid(DEFAULT_GRID);
+    }
+
     renderGrid();
     resetStats();
     clearLog();
@@ -293,7 +331,7 @@ async function paintCell(row, col) {
     gridState = await response.json();
     renderGrid();
   } catch (error) {
-    if (error instanceof TypeError) {
+    if (isConnectivityError(error)) {
       paintCellLocally(row, col);
       setStatus("Preview mode", "amber");
       return;
