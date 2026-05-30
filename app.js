@@ -1,4 +1,3 @@
-const API = "";
 const DEFAULT_GRID = {
   rows: 8,
   cols: 10,
@@ -6,10 +5,17 @@ const DEFAULT_GRID = {
   end: [4, 9],
   density: 0.2
 };
+const FALLBACK_API_ORIGINS = [
+  "http://127.0.0.1:8000",
+  "http://localhost:8000",
+  "http://127.0.0.1:8010",
+  "http://localhost:8010"
+];
 
 let gridState = null;
 let running = false;
 let activeTerrain = "wall";
+let apiBase = null;
 
 const gridEl = document.getElementById("grid");
 const logEl = document.getElementById("log");
@@ -50,18 +56,124 @@ function getErrorMessage(error, fallbackMessage) {
   return fallbackMessage;
 }
 
-async function postJson(path, payload) {
-  const response = await fetch(`${API}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
+function buildApiCandidates() {
+  const candidates = [];
 
-  if (!response.ok) {
-    throw new Error(`Request failed (${response.status})`);
+  if (window.location.protocol.startsWith("http")) {
+    candidates.push(window.location.origin);
   }
 
-  return response;
+  candidates.push(...FALLBACK_API_ORIGINS);
+
+  return [...new Set(candidates)].map((base) => base.replace(/\/$/, ""));
+}
+
+function requestTargets(allowFallbackOrigins) {
+  const targets = [];
+
+  if (apiBase !== null) {
+    targets.push(apiBase);
+  }
+
+  if (allowFallbackOrigins) {
+    targets.push(...buildApiCandidates());
+  }
+
+  if (!targets.length) {
+    targets.push("");
+  }
+
+  return [...new Set(targets)];
+}
+
+function makeCell(row, col, state = "empty") {
+  return {
+    row,
+    col,
+    state,
+    wall: state === "wall"
+  };
+}
+
+function buildLocalGrid(config = DEFAULT_GRID) {
+  const rows = config.rows ?? DEFAULT_GRID.rows;
+  const cols = config.cols ?? DEFAULT_GRID.cols;
+  const start = [...(config.start ?? DEFAULT_GRID.start)];
+  const end = [...(config.end ?? DEFAULT_GRID.end)];
+  const density = config.density ?? DEFAULT_GRID.density;
+  const terrainPool = ["wall", "wall", "wall", "slow", "traffic", "oneway_e", "oneway_s"];
+  const cells = Array.from({ length: rows }, (_, row) =>
+    Array.from({ length: cols }, (_, col) => makeCell(row, col))
+  );
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const isStart = row === start[0] && col === start[1];
+      const isEnd = row === end[0] && col === end[1];
+
+      if (isStart) {
+        cells[row][col] = makeCell(row, col, "start");
+        continue;
+      }
+
+      if (isEnd) {
+        cells[row][col] = makeCell(row, col, "end");
+        continue;
+      }
+
+      if (Math.random() < density) {
+        const state = terrainPool[Math.floor(Math.random() * terrainPool.length)];
+        cells[row][col] = makeCell(row, col, state);
+      }
+    }
+  }
+
+  return { rows, cols, start, end, cells };
+}
+
+function paintCellLocally(row, col) {
+  if (!gridState) return;
+
+  const cell = gridState.cells[row][col];
+  if (!cell || cell.state === "start" || cell.state === "end") {
+    return;
+  }
+
+  if (cell.state === activeTerrain) {
+    cell.state = "empty";
+    cell.wall = false;
+  } else {
+    cell.state = activeTerrain;
+    cell.wall = activeTerrain === "wall";
+  }
+
+  renderGrid();
+}
+
+async function postJson(path, payload, { allowFallbackOrigins = true } = {}) {
+  let lastError = new TypeError("Could not reach the API.");
+
+  for (const base of requestTargets(allowFallbackOrigins)) {
+    try {
+      const response = await fetch(`${base}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        lastError = new Error(`Request failed (${response.status})`);
+        continue;
+      }
+
+      apiBase = base;
+      return response;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
 }
 
 function selectedAlgorithm() {
@@ -96,12 +208,17 @@ async function fetchNewGrid() {
     );
     setStatus("Awaiting dispatch", "amber");
   } catch (error) {
-    gridState = null;
-    gridEl.innerHTML = "";
+    gridState = buildLocalGrid(DEFAULT_GRID);
+    renderGrid();
     resetStats();
     clearLog();
-    addLog("blocked", "Initialization error", getErrorMessage(error, "Could not load the map."), "");
-    setStatus("Initialization failed", "red");
+    addLog(
+      "blocked",
+      "Preview mode",
+      `${getErrorMessage(error, "Could not load the map.")} Showing a local preview grid instead.`,
+      "Start the FastAPI server to enable dispatch and backend-driven updates."
+    );
+    setStatus("Preview mode", "amber");
   }
 }
 
@@ -176,6 +293,12 @@ async function paintCell(row, col) {
     gridState = await response.json();
     renderGrid();
   } catch (error) {
+    if (error instanceof TypeError) {
+      paintCellLocally(row, col);
+      setStatus("Preview mode", "amber");
+      return;
+    }
+
     addLog("blocked", "Paint error", getErrorMessage(error, "Could not update the cell."), "");
     setStatus("Update failed", "red");
   }
